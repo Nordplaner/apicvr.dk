@@ -1,5 +1,7 @@
 .env
 __pycache__
+.pytest_cache
+.venv
 
 .DS_Store
 frontend/.DS_Store

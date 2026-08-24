@@ -65,11 +65,46 @@ def search_cvr_api(cvr_number: int, include_p_units: bool = True) -> dict:
 
         return company_data
 
+# Elasticsearch caps a single response at `size` hits, and the CVR
+# production-unit index returns `terms` matches in an arbitrary (though stable)
+# relevance order -- not sorted by P-number. Asking for fewer hits than there
+# are P-numbers therefore drops an unpredictable subset with nothing in the
+# response to say so: Københavns Kommune (CVR 64942212) has 2645 production
+# units and a single `"size": 1000` request returned exactly 1000 of them,
+# permanently hiding the other 1645 from every consumer.
+#
+# A `terms` query over N P-numbers matches exactly N documents, so the full set
+# can be retrieved by splitting the P-numbers into fixed-size batches and asking
+# for each batch in full -- no cursor, no `from`/`offset`, and no dependence on
+# `index.max_result_window`.
+P_UNIT_BATCH_SIZE = 1000
+
 def fetch_p_units(p_numbers: list) -> list:
-    """Fetch full production-unit detail for each P-number. Returns [] on any error."""
+    """Fetch full production-unit detail for every P-number. Returns [] on any error."""
     if not p_numbers:
         return []
 
+    p_units = []
+    for start in range(0, len(p_numbers), P_UNIT_BATCH_SIZE):
+        batch = fetch_p_unit_batch(p_numbers[start:start + P_UNIT_BATCH_SIZE])
+
+        # All-or-nothing: a partial list is indistinguishable from a complete
+        # one to the caller, which is the failure mode this batching exists to
+        # remove. Better to report "no production units" than a silently short
+        # list that reads as authoritative.
+        if batch is None:
+            return []
+
+        p_units.extend(batch)
+
+    # Stable, predictable ordering. The index's own order is arbitrary, which
+    # made the truncation above look like missing registry data rather than a
+    # capped response.
+    p_units.sort(key=lambda p_unit: p_unit.get('p_number') or 0)
+    return p_units
+
+def fetch_p_unit_batch(p_numbers: list) -> Optional[list]:
+    """Fetch one batch of production units. Returns None if the batch failed."""
     payload = json.dumps({
         "_source": ["VrproduktionsEnhed"],
         "query": {
@@ -77,7 +112,7 @@ def fetch_p_units(p_numbers: list) -> list:
                 "VrproduktionsEnhed.pNummer": p_numbers
             }
         },
-        "size": 1000
+        "size": len(p_numbers)
     })
     headers = {
         'Authorization': 'Basic ' + APITOKEN,
@@ -87,15 +122,15 @@ def fetch_p_units(p_numbers: list) -> list:
     try:
         response = requests.post(url_p, headers=headers, data=payload, timeout=10)
     except requests.RequestException:
-        return []
+        return None
 
     if response.status_code != 200:
-        return []
+        return None
 
     try:
         json_response = response.json()
     except ValueError:
-        return []
+        return None
 
     hits = json_response.get('hits', {}).get('hits', [])
     p_units = []
