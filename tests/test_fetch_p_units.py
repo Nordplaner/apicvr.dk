@@ -11,7 +11,6 @@ units) silently lost 1645 of them.
 import json
 from unittest.mock import patch
 
-import pytest
 import requests
 
 from apis import searchcvr
