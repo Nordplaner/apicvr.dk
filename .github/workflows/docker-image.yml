@@ -8,6 +8,24 @@ on:
 
 jobs:
 
+  test:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        # Matches the Dockerfile's base image.
+        python-version: '3.9'
+    - name: Install dependencies
+      run: pip install -r requirements-dev.txt
+    - name: Run tests
+      # No API_TOKEN needed: the tests mock Elasticsearch and never
+      # reach distribution.virk.dk.
+      run: pytest
+
   build:
 
     runs-on: ubuntu-latest

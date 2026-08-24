@@ -19,6 +19,18 @@ Hvis du nakker vores kode, så må du gerne kredittere os, men det betyder ikke 
 
 Hvis du mener dine Python-skills er bedre end vores slam-kode, så lav et pull request, så skal vi nok læse det igennem.
 
+# Tests
+
+```bash
+python3 -m venv .venv
+.venv/bin/pip install -r requirements-dev.txt
+.venv/bin/python -m pytest
+```
+
+Testene kalder ikke CVR-registret — Elastic Search er mocket, inklusive at den
+afkorter svaret til `size`. Det er præcis den opførsel der fik produktionsenheder
+til at forsvinde lydløst.
+
 # Opsæt din egen instans
 
 1. Kopiér `env.example` til `.env` og indsæt dit API token.
